@@ -1,11 +1,9 @@
 package handler
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
 	"log"
-	"net/http"
 	"strings"
 	"time"
 )
@@ -25,27 +23,26 @@ func (h *Handler) execute(q Query) (Result, error) {
 	}
 	//do real operation
 	ts := time.Now()
-	release, assets, err := h.getAssetsNoCache(q)
-	if err == nil {
-		//didn't need search
-		q.Search = false
-	} else if errors.Is(err, errNotFound) && q.Search {
-		//use ddg/google to auto-detect user...
-		user, program, gerr := imFeelingLuck(q.Program)
-		if gerr != nil {
-			log.Printf("web search failed: %s", gerr)
-		} else {
-			log.Printf("web search found: %s/%s", user, program)
-			if program != q.Program {
-				log.Printf("program mismatch: got %s: expected %s", q.Program, program)
-			}
-			q.Program = program
-			q.User = user
-			//retry assets...
-			release, assets, err = h.getAssetsNoCache(q)
-		}
+	url := fmt.Sprintf("https://api.github.com/repos/%s/%s", q.User, q.Program)
+
+	//check repo is private
+
+	repoRes := ghRepo{}
+
+	if err := h.get(url, &repoRes); err != nil {
+		return Result{}, err
 	}
-	//asset fetch failed, dont cache
+
+	isPrivate := false
+
+	if repoRes.Visibility == "private" {
+		isPrivate = true
+	}
+
+	q.Private = isPrivate
+
+	release, assets, err := h.getAssetsNoCache(q)
+
 	if err != nil {
 		return Result{}, err
 	}
@@ -106,17 +103,17 @@ func (h *Handler) getAssetsNoCache(q Query) (string, Assets, error) {
 	if len(ghas) == 0 {
 		return release, nil, errors.New("no assets found")
 	}
-	sumIndex, _ := ghas.getSumIndex()
-	if l := len(sumIndex); l > 0 {
-		log.Printf("fetched %d asset shasums", l)
-	}
+
 	assets := Assets{}
 	index := map[string]bool{}
 	for _, ga := range ghas {
 		url := ga.BrowserDownloadURL
+		if q.Private {
+			url = ga.URL
+		}
 		//only binary containers are supported
 		//TODO deb,rpm etc
-		fext := getFileExt(url)
+		fext := getFileExt(ga.Name)
 		if fext == "" && ga.Size > 1024*1024 {
 			fext = ".bin" // +1MB binary
 		}
@@ -144,12 +141,11 @@ func (h *Handler) getAssetsNoCache(q Query) (string, Assets, error) {
 		}
 		log.Printf("fetched asset: %s", ga.Name)
 		asset := Asset{
-			OS:     os,
-			Arch:   arch,
-			Name:   ga.Name,
-			URL:    url,
-			Type:   fext,
-			SHA256: sumIndex[ga.Name],
+			OS:   os,
+			Arch: arch,
+			Name: ga.Name,
+			URL:  url,
+			Type: fext,
 		}
 		//there can only be 1 file for each OS/Arch
 		if index[asset.Key()] {
@@ -167,37 +163,8 @@ func (h *Handler) getAssetsNoCache(q Query) (string, Assets, error) {
 
 type ghAssets []ghAsset
 
-func (as ghAssets) getSumIndex() (map[string]string, error) {
-	url := ""
-	for _, ga := range as {
-		//is checksum file?
-		if ga.IsChecksumFile() {
-			url = ga.BrowserDownloadURL
-			break
-		}
-	}
-	if url == "" {
-		return nil, errors.New("no sum file found")
-	}
-	resp, err := http.DefaultClient.Get(url)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	// take each line and insert into the index
-	index := map[string]string{}
-	s := bufio.NewScanner(resp.Body)
-	for s.Scan() {
-		fs := strings.Fields(s.Text())
-		if len(fs) != 2 {
-			continue
-		}
-		index[fs[1]] = fs[0]
-	}
-	if err := s.Err(); err != nil {
-		return nil, err
-	}
-	return index, nil
+type ghRepo struct {
+	Visibility string `json:"visibility"`
 }
 
 type ghAsset struct {

@@ -7,6 +7,3 @@ var Text []byte
 
 //go:embed install.sh.tmpl
 var Shell []byte
-
-//go:embed install.rb.tmpl
-var Homebrew []byte

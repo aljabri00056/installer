@@ -20,6 +20,7 @@ function install {
 	ASPROG="{{ .AsProgram }}"
 	MOVE="{{ .MoveToPath }}"
 	RELEASE="{{ .Release }}"
+	PRIVATE="{{ .Private }}"
 	INSECURE="{{ .Insecure }}"
 	OUT_DIR="{{ if .MoveToPath }}/usr/local/bin{{ else }}$(pwd){{ end }}"
 	GH="https://github.com"
@@ -52,10 +53,12 @@ function install {
 	fi
 	#optional auth to install from private repos
 	#NOTE: this also needs to be set on your instance of installer
-	AUTH="${GITHUB_TOKEN}"
-	if [ ! -z "$AUTH" ]; then
-		GET="$GET -H 'Authorization: $AUTH'"
+	AUTH="token ${GITHUB_TOKEN}"
+	
+	if [ "$PRIVATE" = "true" ]; then
+		GET="$GET -H 'Authorization: $AUTH' -H 'Accept: application/octet-stream'"
 	fi
+
 	#find OS #TODO BSDs and other posixs
 	case `uname -s` in
 	Darwin) OS="darwin";;
@@ -100,16 +103,7 @@ function install {
 		echo -n " as $ASPROG"
 	fi
 	echo -n " (${OS}/${ARCH})"
-	{{ if .Search }}
-	# web search, give time to cancel
-	echo -n " in 5 seconds"
-	for i in 1 2 3 4 5; do
-		sleep 1
-		echo -n "."
-	done
-	{{ else }}
-	echo "....."
-	{{ end }}
+	
 	#enter tempdir
 	mkdir -p $TMP_DIR
 	cd $TMP_DIR

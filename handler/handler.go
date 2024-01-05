@@ -16,7 +16,7 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/jpillora/installer/scripts"
+	"github.com/divyam234/installer/scripts"
 )
 
 const (
@@ -24,16 +24,14 @@ const (
 )
 
 var (
-	isTermRe     = regexp.MustCompile(`(?i)^(curl|wget)\/`)
-	isHomebrewRe = regexp.MustCompile(`(?i)^homebrew`)
-	errMsgRe     = regexp.MustCompile(`[^A-Za-z0-9\ :\/\.]`)
-	errNotFound  = errors.New("not found")
+	isTermRe    = regexp.MustCompile(`(?i)^(curl|wget)\/`)
+	errMsgRe    = regexp.MustCompile(`[^A-Za-z0-9\ :\/\.]`)
+	errNotFound = errors.New("not found")
 )
 
 type Query struct {
 	User, Program, AsProgram, Release string
-	MoveToPath, Search, Insecure      bool
-	SudoMove                          bool // deprecated: not used, now automatically detected
+	MoveToPath, Insecure, Private     bool
 }
 
 type Result struct {
@@ -60,11 +58,6 @@ type Handler struct {
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path == "/healthz" || r.URL.Path == "/favicon.ico" {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
-		return
-	}
 	// calculate response type
 	ext := ""
 	script := ""
@@ -74,8 +67,6 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case isTermRe.MatchString(ua):
 			qtype = "script"
-		case isHomebrewRe.MatchString(ua):
-			qtype = "ruby"
 		default:
 			qtype = "text"
 		}
@@ -94,10 +85,6 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/x-shellscript")
 		ext = "sh"
 		script = string(scripts.Shell)
-	case "homebrew", "ruby":
-		w.Header().Set("Content-Type", "text/ruby")
-		ext = "rb"
-		script = string(scripts.Homebrew)
 	case "text":
 		w.Header().Set("Content-Type", "text/plain")
 		ext = "txt"
@@ -127,14 +114,9 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if q.Program == "" {
 		q.Program = q.User
 		q.User = h.Config.User
-		q.Search = true
 	}
 	if q.Release == "" {
 		q.Release = "latest"
-	}
-	// micro > nano!
-	if q.User == "" && q.Program == "micro" {
-		q.User = "zyedidia"
 	}
 	// force user/repo
 	if h.Config.ForceUser != "" {
@@ -146,7 +128,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// validate query
 	valid := q.Program != ""
 	if !valid && path == "" {
-		http.Redirect(w, r, "https://github.com/jpillora/installer", http.StatusMovedPermanently)
+		http.Redirect(w, r, "https://github.com/divyam234/installer", http.StatusMovedPermanently)
 		return
 	}
 	if !valid {
@@ -178,7 +160,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 type Asset struct {
-	Name, OS, Arch, URL, Type, SHA256 string
+	Name, OS, Arch, URL, Type string
 }
 
 func (a Asset) Key() string {
@@ -215,7 +197,8 @@ func (h *Handler) get(url string, v interface{}) error {
 	if h.Config.Token != "" {
 		req.Header.Set("Authorization", "token "+h.Config.Token)
 	}
-	resp, err := http.Get(url)
+	client := &http.Client{}
+	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("request failed: %s: %s", url, err)
 	}

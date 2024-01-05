@@ -4,13 +4,11 @@ program: {{ .Program }}{{if .AsProgram }}
 as: {{ .AsProgram }}{{end}}
 release: {{ .Release }}
 move-into-path: {{ .MoveToPath }}
-sudo-move: {{ .SudoMove }}
-used-search: {{ .Search }}
+private: {{ .Private }}
 
 release assets:
 {{ range .Assets }}  {{ .Key }}
-    url:    {{ .URL }} {{if .SHA256 }}
-    sha256: {{ .SHA256 }}{{end}}
+    url:    {{ .URL }}
 {{end}}
 has-m1-asset: {{ .M1Asset }}
 

@@ -5,8 +5,8 @@ Quickly install pre-compiled binaries from Github releases.
 
 Installer is an HTTP server which returns shell scripts. The returned script will detect platform OS and architecture, choose from a selection of URLs, download the appropriate file, un(zip|tar|gzip) the file, find the binary (largest file) and optionally move it into your `PATH`. Useful for installing your favourite pre-compiled programs on hosts using only `curl`.
 
-[![GoDev](https://img.shields.io/static/v1?label=godoc&message=reference&color=00add8)](https://pkg.go.dev/github.com/jpillora/installer)
-[![CI](https://github.com/jpillora/installer/workflows/CI/badge.svg)](https://github.com/jpillora/installer/actions?workflow=CI)
+[![GoDev](https://img.shields.io/static/v1?label=godoc&message=reference&color=00add8)](https://pkg.go.dev/github.com/divyam234/installer)
+[![CI](https://github.com/divyam234/installer/workflows/CI/badge.svg)](https://github.com/divyam234/installer/actions?workflow=CI)
 
 ## Usage
 
@@ -64,7 +64,7 @@ curl https://i.jpillora.com/<query>! | bash
 
 You'll have to set `GITHUB_TOKEN` on both your server (instance of `installer`) and client (before you run `curl https://i.jpillora.com/foobar | bash`)
 
-See https://github.com/jpillora/installer/issues/31 for how this could improved
+See https://github.com/divyam234/installer/issues/31 for how this could improved
 
 ## Host your own
 
@@ -77,7 +77,7 @@ See https://github.com/jpillora/installer/issues/31 for how this could improved
 * Install from source
 
     ```sh
-    go get github.com/jpillora/installer
+    go get github.com/divyam234/installer
     ```
 
 * Install on [Fly.io](https://fly.io)
