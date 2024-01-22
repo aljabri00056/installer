@@ -118,11 +118,26 @@ func (h *Handler) getAssetsNoCache(q Query) (string, Assets, error) {
 			fext = ".bin" // +1MB binary
 		}
 		switch fext {
-		case ".bin", ".zip", ".tar.bz", ".tar.bz2", ".bz2", ".gz", ".tar.gz", ".tgz":
+		case ".bin", ".zip", ".tar.bz", ".tar.bz2", ".bz2", ".gz", ".tar.gz", ".tgz", ".tar.xz":
 			// valid
 		default:
 			log.Printf("fetched asset has unsupported file type: %s (ext '%s')", ga.Name, fext)
 			continue
+		}
+
+		//filter name by query
+		if q.Include != "" {
+			skip := true
+			includes := strings.Split(q.Include, ",")
+			for _, include := range includes {
+				if strings.Contains(ga.Name, include) {
+					skip = false
+				}
+			}
+			if skip {
+				continue
+			}
+
 		}
 		//match
 		os := getOS(ga.Name)
@@ -150,18 +165,26 @@ func (h *Handler) getAssetsNoCache(q Query) (string, Assets, error) {
 			URL:  url,
 			Type: fext,
 		}
-		//there can only be 1 file for each OS/Arch
-		if index[asset.Key()] {
-			continue
-		}
-		index[asset.Key()] = true
-		//include!
 		assets = append(assets, asset)
+
 	}
 	if len(assets) == 0 {
 		return release, nil, errors.New("no downloads found for this release")
 	}
-	return release, assets, nil
+
+	//there can only be 1 file for each OS/Arch
+
+	filterAssets := Assets{}
+
+	for _, asset := range assets {
+		if index[asset.Key()] {
+			continue
+		}
+		index[asset.Key()] = true
+		filterAssets = append(filterAssets, asset)
+	}
+
+	return release, filterAssets, nil
 }
 
 type ghAssets []ghAsset

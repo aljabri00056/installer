@@ -6,7 +6,7 @@ import (
 )
 
 var (
-	archRe     = regexp.MustCompile(`(arm64|arm|386|amd64|x86_64|aarch64)`)
+	archRe     = regexp.MustCompile(`(arm64|arm|386|amd64|x86_64|aarch64|linux64|win64)`)
 	fileExtRe  = regexp.MustCompile(`(\.tar)?(\.[a-z][a-z0-9]+)$`)
 	posixOSRe  = regexp.MustCompile(`(darwin|linux|(net|free|open)bsd|mac|osx|windows|win)`)
 	checksumRe = regexp.MustCompile(`(checksums|sha256sums)`)
@@ -28,7 +28,7 @@ func getArch(s string) string {
 	s = strings.ToLower(s)
 	a := archRe.FindString(s)
 	//arch modifications
-	if a == "64" || a == "x86_64" {
+	if a == "linux64" || a == "x86_64" || a == "win64" {
 		a = "amd64"
 	} else if a == "32" {
 		a = "386"
