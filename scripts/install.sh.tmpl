@@ -125,7 +125,7 @@ function install {
 	elif [[ $FTYPE = ".tar.xz" ]] || [[ $FTYPE = ".txz" ]]; then
 		which tar > /dev/null || fail "tar is not installed"
 		which xz > /dev/null || fail "xz is not installed"
-		bash -c "$GET $URL" | tar xf - || fail "download failed"
+		bash -c "$GET $URL" | tar jxf - || fail "download failed"
 
 	elif [[ $FTYPE = ".zip" ]]; then
 		which unzip > /dev/null || fail "unzip is not installed"
