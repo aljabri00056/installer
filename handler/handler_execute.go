@@ -139,6 +139,9 @@ func (h *Handler) getAssetsNoCache(q Query) (string, Assets, error) {
 			log.Printf("fetched asset has unknown os: %s", ga.Name)
 			continue
 		}
+		if arch == "" {
+			continue
+		}
 		log.Printf("fetched asset: %s", ga.Name)
 		asset := Asset{
 			OS:   os,

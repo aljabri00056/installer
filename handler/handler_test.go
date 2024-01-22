@@ -11,7 +11,7 @@ import (
 
 func TestJPilloraServe(t *testing.T) {
 	h := &handler.Handler{}
-	r := httptest.NewRequest("GET", "/jpillora/serve", nil)
+	r := httptest.NewRequest("GET", "/abcfy2/aria2-static-build", nil)
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, r)
 	t.Log(w.Body.String())
