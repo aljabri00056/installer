@@ -53,7 +53,7 @@ curl https://sh-install.vercel.app/<query>! | bash
 
 ## Private repos
 
-You'll have to set `GITHUB_TOKEN` on both your server (instance of `installer`) and client (before you run `curl https://sh-install.vercel.app/foobar | bash`)
+You'll have to set `GITHUB_TOKEN` on both your server (instance of `installer`) and client (before you run `curl https://sh-install.vercel.app/foobar?private=1 | bash`)
 
 ## Force a particular `user/repo`
 
