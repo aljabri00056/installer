@@ -14,16 +14,10 @@ Installer is an HTTP server which returns shell scripts. The returned script wil
 curl https://sh-install.vercel.app/<user>/<repo>@<release>! | bash
 ```
 
-```sh
-# search web for github repo <query>
-curl https://sh-install.vercel.app/<query>! | bash
-```
-
 *Or you can use* `wget -qO- <url> | bash`
 
 **Path API**
 
-* `user` Github user (defaults to @jpillora, customisable if you [host your own](#host-your-own), searches the web to pick most relevant `user` when `repo` not found)
 * `repo` Github repository belonging to `user` (**required**)
 * `release` Github release name (defaults to the **latest** release)
 * `!` When provided, downloads binary directly into `/usr/local/bin/` (defaults to working directory)
