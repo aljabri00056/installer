@@ -23,23 +23,6 @@ func (h *Handler) execute(q Query) (Result, error) {
 	}
 	//do real operation
 	ts := time.Now()
-	url := fmt.Sprintf("https://api.github.com/repos/%s/%s", q.User, q.Program)
-
-	//check repo is private
-
-	repoRes := ghRepo{}
-
-	if err := h.get(url, &repoRes); err != nil {
-		return Result{}, err
-	}
-
-	isPrivate := false
-
-	if repoRes.Visibility == "private" {
-		isPrivate = true
-	}
-
-	q.Private = isPrivate
 
 	release, assets, err := h.getAssetsNoCache(q)
 
@@ -75,21 +58,21 @@ func (h *Handler) getAssetsNoCache(q Query) (string, Assets, error) {
 	if release == "" || release == "latest" {
 		url += "/latest"
 		ghr := ghRelease{}
-		if err := h.get(url, &ghr); err != nil {
+		if err := h.get(url, q.Private, &ghr); err != nil {
 			return release, nil, err
 		}
 		release = ghr.TagName //discovered
 		ghas = ghr.Assets
 	} else {
 		ghrs := []ghRelease{}
-		if err := h.get(url, &ghrs); err != nil {
+		if err := h.get(url, q.Private, &ghrs); err != nil {
 			return release, nil, err
 		}
 		found := false
 		for _, ghr := range ghrs {
 			if ghr.TagName == release {
 				found = true
-				if err := h.get(ghr.AssetsURL, &ghas); err != nil {
+				if err := h.get(ghr.AssetsURL, q.Private, &ghas); err != nil {
 					return release, nil, err
 				}
 				ghas = ghr.Assets
@@ -188,10 +171,6 @@ func (h *Handler) getAssetsNoCache(q Query) (string, Assets, error) {
 }
 
 type ghAssets []ghAsset
-
-type ghRepo struct {
-	Visibility string `json:"visibility"`
-}
 
 type ghAsset struct {
 	BrowserDownloadURL string `json:"browser_download_url"`

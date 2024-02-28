@@ -1,14 +1,16 @@
-package api
+package main
 
 import (
+	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 
 	"github.com/divyam234/installer/handler"
 )
 
-func Handler(w http.ResponseWriter, r *http.Request) {
+func main() {
 	c := handler.DefaultConfig
 
 	if c.Token == "" && os.Getenv("GH_TOKEN") != "" {
@@ -21,7 +23,15 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		log.Printf("locked repo to '%s'", c.ForceRepo)
 	}
 
-	h := &handler.Handler{Config: c}
-
-	h.ServeHTTP(w, r)
+	lh := &handler.Handler{Config: c}
+	addr := fmt.Sprintf("%s:%d", c.Host, c.Port)
+	l, err := net.Listen("tcp4", addr)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Printf("listening on %s...", addr)
+	if err := http.Serve(l, lh); err != nil {
+		log.Fatal(err)
+	}
+	log.Print("exiting")
 }

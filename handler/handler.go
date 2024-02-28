@@ -100,6 +100,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Insecure:  r.URL.Query().Get("insecure") == "1",
 		AsProgram: r.URL.Query().Get("as"),
 		Include:   r.URL.Query().Get("include"),
+		Private:   r.URL.Query().Get("private") == "1",
 	}
 	// set query from route
 	path := strings.TrimPrefix(r.URL.Path, "/")
@@ -192,10 +193,10 @@ func (as Assets) HasM1() bool {
 	return false
 }
 
-func (h *Handler) get(url string, v interface{}) error {
+func (h *Handler) get(url string, private bool, v interface{}) error {
 	req, _ := http.NewRequest("GET", url, nil)
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
-	if h.Config.Token != "" {
+	if private && h.Config.Token != "" {
 		req.Header.Set("Authorization", "token "+h.Config.Token)
 	}
 	client := &http.Client{}
