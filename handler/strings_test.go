@@ -20,3 +20,17 @@ func TestFilExt(t *testing.T) {
 		}
 	}
 }
+
+func TestArch(t *testing.T) {
+	tests := []struct {
+		file, arch string
+	}{
+		{"test-armv8-2.11.5.gz", "arm64"},
+	}
+	for _, tc := range tests {
+		ext := getArch(tc.file)
+		if ext != tc.arch {
+			t.Fatalf("getFileExt(%s) = %s, want %s", tc.file, ext, tc.arch)
+		}
+	}
+}
