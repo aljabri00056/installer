@@ -36,6 +36,7 @@ function install {
 	USER="{{ .User }}"
 	PROG="{{ .Program }}"
 	ASPROG="{{ .AsProgram }}"
+	DEFAULT_ARCH="{{ .ARCH }}"
 	MOVE="{{ .MoveToPath }}"
 	RELEASE="{{ .Release }}"
 	PRIVATE="{{ .Private }}"
@@ -101,6 +102,11 @@ function install {
 	else
 		fail "unknown arch: $(uname -m)"
 	fi
+	
+	if [ ! -z "$DEFAULT_ARCH" ]; then
+		ARCH="$DEFAULT_ARCH"
+	fi
+
 	#choose from asset list
 	URL=""
 	FTYPE=""

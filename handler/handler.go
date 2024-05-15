@@ -30,8 +30,8 @@ var (
 )
 
 type Query struct {
-	User, Program, AsProgram, Release, Include string
-	MoveToPath, Insecure, Private              bool
+	User, Program, AsProgram, Release, Include, Arch string
+	MoveToPath, Insecure, Private                    bool
 }
 
 type Result struct {
@@ -101,6 +101,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		AsProgram: r.URL.Query().Get("as"),
 		Include:   r.URL.Query().Get("include"),
 		Private:   r.URL.Query().Get("private") == "1",
+		Arch:      r.URL.Query().Get("arch"),
 	}
 	// set query from route
 	path := strings.TrimPrefix(r.URL.Path, "/")
