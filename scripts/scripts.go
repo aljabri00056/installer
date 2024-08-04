@@ -6,4 +6,7 @@ import _ "embed"
 var Text []byte
 
 //go:embed install.sh.tmpl
-var Shell []byte
+var LinuxShell []byte
+
+//go:embed install.ps1.tmpl
+var WindowsShell []byte

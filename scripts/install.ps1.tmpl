@@ -1,0 +1,203 @@
+# Enable debug mode if needed
+if ($env:DEBUG -eq "1") {
+    $DebugPreference = "Continue"
+}
+
+# Script parameters
+[string]$User = "{{ .User }}"
+[string]$Program = "{{ .Program }}"
+[string]$AsProgram = "{{ .AsProgram }}"
+[string]$DefaultArch = "{{ .Arch }}"
+[bool]$MoveToPath = ${{ .MoveToPath }}
+[bool]$Private = ${{ .Private }}
+[string]$Token = $env:GITHUB_TOKEN
+[bool]$Insecure = ${{ .Insecure }}
+
+# Define installer directory
+$InstallerDir = Join-Path $env:USERPROFILE ".installer\bin"
+
+# Create temporary directory
+$TempDir = Join-Path $env:TEMP "installer-$(Get-Random)"
+New-Item -ItemType Directory -Path $TempDir | Out-Null
+
+# Ensure installer directory exists
+function Initialize-InstallerDirectory {
+    if (-not (Test-Path $InstallerDir)) {
+        New-Item -ItemType Directory -Path $InstallerDir -Force | Out-Null
+        Write-Host "Created installer directory: $InstallerDir"
+    }
+}
+
+# Add to PATH if not already present
+function Add-ToPath {
+    $userPath = [Environment]::GetEnvironmentVariable("PATH", "User")
+    if ($userPath -notlike "*$InstallerDir*") {
+        $newPath = $userPath + [IO.Path]::PathSeparator + $InstallerDir
+        [Environment]::SetEnvironmentVariable("PATH", $newPath, "User")
+        $env:PATH = $env:PATH + [IO.Path]::PathSeparator + $InstallerDir
+        Write-Host "Added installer directory to PATH"
+    }
+}
+
+# Cleanup function
+function Cleanup {
+    Remove-Item -Recurse -Force $TempDir -ErrorAction SilentlyContinue
+}
+
+# Error handling function
+function Fail {
+    param([string]$Message)
+    Write-Host "============"
+    Write-Error "Error: $Message"
+    Cleanup
+    exit 1
+}
+
+# Move function
+function Move-Binary {
+    param(
+        [string]$Source,
+        [string]$Destination
+    )
+    
+    try {
+        Copy-Item -Path $Source -Destination $Destination -Force
+        if ($MoveToPath) {
+            Write-Host "Installed at $Destination"
+        } else {
+            Write-Host "Downloaded to $Destination"
+        }
+    } catch {
+        Fail "Failed to move file: $_"
+    }
+}
+
+function Install-Binary {
+    # Initialize installer directory and PATH
+    Initialize-InstallerDirectory
+    if ($MoveToPath) {
+        Add-ToPath
+    }
+
+    # Set output directory
+    $OutDir = if ($MoveToPath) {
+        $InstallerDir
+    } else {
+        (Get-Location).Path
+    }
+
+    # Verify output directory exists
+    if (-not (Test-Path $OutDir)) {
+        Fail "Output directory missing: $OutDir"
+    }
+
+    # Detect architecture
+    $arch = if ($DefaultArch) {
+        $DefaultArch
+    } else {
+        if ([Environment]::Is64BitOperatingSystem) {
+            if ([System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture -eq [System.Runtime.InteropServices.Architecture]::Arm64) {
+                "arm64"
+            } else {
+                "amd64"
+            }
+        } else {
+            "386"
+        }
+    }
+
+    # Setup HTTP client
+    $webClient = New-Object System.Net.WebClient
+    if ($Private -and $Token) {
+        $webClient.Headers.Add("Authorization", "token $Token")
+        $webClient.Headers.Add("Accept", "application/octet-stream")
+        $webClient.Headers.Add("User-Agent", "curl/8.9.1")
+    }
+    if ($Insecure) {
+        [System.Net.ServicePointManager]::ServerCertificateValidationCallback = {$true}
+    }
+
+    # Define asset mapping
+    $assetMap = @{
+        {{ range .Assets }}
+        "{{ .OS }}_{{ .Arch }}" = @{
+            "URL" = "{{ .URL }}"
+            "Type" = "{{ .Type }}"
+        }
+        {{end}}
+    }
+
+    # Get correct asset
+    $platformKey = "windows_$arch"
+    $asset = $assetMap[$platformKey]
+    if (-not $asset) {
+        Fail "No asset for platform windows-$arch"
+    }
+
+    Write-Host "Downloading $User/$Program {{ .Version }} (windows/$arch)"
+
+    try {
+        Push-Location $TempDir
+
+        $downloadPath = Join-Path $TempDir "download$($asset.Type)"
+        $webClient.DownloadFile($asset.URL, $downloadPath)
+
+        # Handle different archive types
+        switch -regex ($asset.Type) {
+            "\.zip$" {
+                Expand-Archive -Path $downloadPath -DestinationPath $TempDir -Force
+            }
+            "\.tar\.gz$|\.tgz$" {
+                tar -xzf $downloadPath
+            }
+            "\.bin$" {
+                # Direct binary, no extraction needed
+            }
+            default {
+                Fail "Unknown file type: $($asset.Type)"
+            }
+        }
+
+       # In the binary finding and moving section, replace the existing if ($AsProgram) block with:
+        if ($AsProgram) {
+            # Split AsProgram into array using comma as delimiter
+            $binaries = $AsProgram -split ',' | ForEach-Object { $_.Trim() }
+            
+            foreach ($binName in $binaries) {
+                # Search for each binary across all directories
+                $binary = Get-ChildItem -Recurse -Filter "*$binName*.exe" | Select-Object -First 1
+                if (-not $binary) {
+                    Fail "Could not find binary: $binName"
+                }
+                $destination = Join-Path $OutDir "$binName.exe"
+                Move-Binary $binary.FullName $destination
+            }
+        } else {
+            # Find largest executable in the entire directory structure
+            $binary = Get-ChildItem -Recurse -Filter "*.exe" | 
+                Sort-Object Length -Descending | 
+                Select-Object -First 1
+            if (-not $binary) {
+                Fail "Could not find binary"
+            }
+            $destination = Join-Path $OutDir $binary.Name
+            Move-Binary $binary.FullName $destination
+        }
+    }
+    catch {
+        Fail "Installation failed: $_"
+    }
+    finally {
+        Pop-Location
+        Cleanup
+    }
+}
+
+# Run installation
+Install-Binary
+
+# Display success message with PATH information
+if ($MoveToPath) {
+    Write-Host "`nInstallation successful!"
+    Write-Host "Please restart your terminal to use the installed binaries."
+}

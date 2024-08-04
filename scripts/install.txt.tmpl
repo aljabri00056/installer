@@ -5,6 +5,7 @@ as: {{ .AsProgram }}{{end}}
 release: {{ .Release }}
 move-into-path: {{ .MoveToPath }}
 private: {{ .Private }}
+platform: {{ .Platform }}
 
 release assets:
 {{ range .Assets }}  {{ .Key }}

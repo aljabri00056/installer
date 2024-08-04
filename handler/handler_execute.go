@@ -38,6 +38,7 @@ func (h *Handler) execute(q Query) (Result, error) {
 		Timestamp: ts,
 		Query:     q,
 		Assets:    assets,
+		Version:   release,
 		M1Asset:   assets.HasM1(),
 	}
 	//success store results
@@ -45,6 +46,15 @@ func (h *Handler) execute(q Query) (Result, error) {
 	h.cache[key] = result
 	h.cacheMut.Unlock()
 	return result, nil
+}
+
+func (h *Handler) ghRepo(user, repo, token string) (*ghRepo, error) {
+	res := ghRepo{}
+	url := fmt.Sprintf("https://api.github.com/repos/%s/%s", user, repo)
+	if err := h.get(url, token, &res); err != nil {
+		return nil, err
+	}
+	return &res, nil
 }
 
 func (h *Handler) getAssetsNoCache(q Query) (string, Assets, error) {
@@ -55,24 +65,25 @@ func (h *Handler) getAssetsNoCache(q Query) (string, Assets, error) {
 	log.Printf("fetching asset info for %s/%s@%s", user, repo, release)
 	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases", user, repo)
 	ghas := ghAssets{}
+	token := q.Token
 	if release == "" || release == "latest" {
 		url += "/latest"
 		ghr := ghRelease{}
-		if err := h.get(url, q.Private, &ghr); err != nil {
+		if err := h.get(url, token, &ghr); err != nil {
 			return release, nil, err
 		}
 		release = ghr.TagName //discovered
 		ghas = ghr.Assets
 	} else {
 		ghrs := []ghRelease{}
-		if err := h.get(url, q.Private, &ghrs); err != nil {
+		if err := h.get(url, token, &ghrs); err != nil {
 			return release, nil, err
 		}
 		found := false
 		for _, ghr := range ghrs {
 			if ghr.TagName == release {
 				found = true
-				if err := h.get(ghr.AssetsURL, q.Private, &ghas); err != nil {
+				if err := h.get(ghr.AssetsURL, token, &ghas); err != nil {
 					return release, nil, err
 				}
 				ghas = ghr.Assets
@@ -91,7 +102,7 @@ func (h *Handler) getAssetsNoCache(q Query) (string, Assets, error) {
 	index := map[string]bool{}
 	for _, ga := range ghas {
 		url := ga.BrowserDownloadURL
-		if q.Private {
+		if q.Token != "" && q.Private {
 			url = ga.URL
 		}
 		//only binary containers are supported
@@ -125,13 +136,6 @@ func (h *Handler) getAssetsNoCache(q Query) (string, Assets, error) {
 		//match
 		os := getOS(ga.Name)
 		arch := getArch(ga.Name)
-		//windows not supported yet
-		if os == "windows" {
-			log.Printf("fetched asset is for windows: %s", ga.Name)
-			//TODO: powershell
-			// EG: iwr https://deno.land/x/install/install.ps1 -useb | iex
-			continue
-		}
 		//unknown os, cant use
 		if os == "" {
 			log.Printf("fetched asset has unknown os: %s", ga.Name)
@@ -215,4 +219,8 @@ type ghRelease struct {
 	UploadURL       string      `json:"upload_url"`
 	URL             string      `json:"url"`
 	ZipballURL      string      `json:"zipball_url"`
+}
+
+type ghRepo struct {
+	Private bool `json:"private"`
 }

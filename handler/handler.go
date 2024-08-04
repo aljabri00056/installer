@@ -10,6 +10,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"regexp"
 	"strings"
 	"sync"
@@ -24,20 +25,21 @@ const (
 )
 
 var (
-	isTermRe    = regexp.MustCompile(`(?i)^(curl|wget)\/`)
+	isTermRe    = regexp.MustCompile(`(?i)^(curl|wget|.+WindowsPowerShell)\/`)
 	errMsgRe    = regexp.MustCompile(`[^A-Za-z0-9\ :\/\.]`)
 	errNotFound = errors.New("not found")
 )
 
 type Query struct {
-	User, Program, AsProgram, Release, Include, Arch string
-	MoveToPath, Insecure, Private                    bool
+	User, Program, AsProgram, Release, Include, Arch, Token, Platform string
+	MoveToPath, Insecure, Private                                     bool
 }
 
 type Result struct {
 	Query
 	Timestamp time.Time
 	Assets    Assets
+	Version   string
 	M1Asset   bool
 }
 
@@ -78,13 +80,38 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if qtype == "script" {
 			cleaned = fmt.Sprintf("echo '%s'", cleaned)
 		}
-		http.Error(w, cleaned, http.StatusInternalServerError)
+		http.Error(w, cleaned, code)
+	}
+
+	q := Query{
+		User:      "",
+		Program:   "",
+		Release:   "",
+		Insecure:  r.URL.Query().Get("insecure") == "1",
+		AsProgram: r.URL.Query().Get("as"),
+		Include:   r.URL.Query().Get("include"),
+		Arch:      r.URL.Query().Get("arch"),
+		Platform:  r.URL.Query().Get("platform"),
+	}
+	if q.Platform == "" {
+		q.Platform = "linux"
+	}
+	if r.URL.Query().Get("move") == "" {
+		q.MoveToPath = true
+	} else {
+		q.MoveToPath = r.URL.Query().Get("move") == "1"
 	}
 	switch qtype {
 	case "script":
-		w.Header().Set("Content-Type", "text/x-shellscript")
-		ext = "sh"
-		script = string(scripts.Shell)
+		if q.Platform == "windows" {
+			w.Header().Set("Content-Type", "text/x-powershell")
+			ext = "ps1"
+			script = string(scripts.WindowsShell)
+		} else {
+			w.Header().Set("Content-Type", "text/x-shellscript")
+			ext = "sh"
+			script = string(scripts.LinuxShell)
+		}
 	case "text":
 		w.Header().Set("Content-Type", "text/plain")
 		ext = "txt"
@@ -93,23 +120,10 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		showError("Unknown type", http.StatusInternalServerError)
 		return
 	}
-	q := Query{
-		User:      "",
-		Program:   "",
-		Release:   "",
-		Insecure:  r.URL.Query().Get("insecure") == "1",
-		AsProgram: r.URL.Query().Get("as"),
-		Include:   r.URL.Query().Get("include"),
-		Private:   r.URL.Query().Get("private") == "1",
-		Arch:      r.URL.Query().Get("arch"),
-	}
+
 	// set query from route
 	path := strings.TrimPrefix(r.URL.Path, "/")
-	// move to path with !
-	if strings.HasSuffix(path, "!") {
-		q.MoveToPath = true
-		path = strings.TrimRight(path, "!")
-	}
+
 	var rest string
 	q.User, rest = splitHalf(path, "/")
 	q.Program, q.Release = splitHalf(rest, "@")
@@ -120,13 +134,6 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if q.Release == "" {
 		q.Release = "latest"
-	}
-	// force user/repo
-	if h.Config.ForceUser != "" {
-		q.User = h.Config.ForceUser
-	}
-	if h.Config.ForceRepo != "" {
-		q.Program = h.Config.ForceRepo
 	}
 	// validate query
 	valid := q.Program != ""
@@ -139,6 +146,21 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		showError("Invalid path", http.StatusBadRequest)
 		return
 	}
+
+	split := strings.Split(r.Header.Get("Authorization"), "Bearer ")
+	if len(split) > 1 {
+		q.Token = split[1]
+	}
+	if q.Token == "" {
+		q.Token = os.Getenv("GITHUB_TOKEN")
+	}
+	res, err := h.ghRepo(q.User, q.Program, q.Token)
+	if err != nil {
+		showError(err.Error(), http.StatusBadRequest)
+		return
+	}
+	q.Private = res.Private
+
 	// fetch assets
 	result, err := h.execute(q)
 	if err != nil {
@@ -194,11 +216,11 @@ func (as Assets) HasM1() bool {
 	return false
 }
 
-func (h *Handler) get(url string, private bool, v interface{}) error {
+func (h *Handler) get(url string, token string, v interface{}) error {
 	req, _ := http.NewRequest("GET", url, nil)
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
-	if private && h.Config.Token != "" {
-		req.Header.Set("Authorization", "token "+h.Config.Token)
+	if token != "" {
+		req.Header.Set("Authorization", "token "+token)
 	}
 	client := &http.Client{}
 	resp, err := client.Do(req)
@@ -214,9 +236,10 @@ func (h *Handler) get(url string, private bool, v interface{}) error {
 		b, _ := io.ReadAll(resp.Body)
 		return errors.New(http.StatusText(resp.StatusCode) + " " + string(b))
 	}
-
-	if err := json.NewDecoder(resp.Body).Decode(v); err != nil {
-		return fmt.Errorf("download failed: %s: %s", url, err)
+	if v != nil {
+		if err := json.NewDecoder(resp.Body).Decode(v); err != nil {
+			return fmt.Errorf("download failed: %s: %s", url, err)
+		}
 	}
 
 	return nil

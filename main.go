@@ -5,23 +5,12 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"os"
 
 	"github.com/divyam234/installer/handler"
 )
 
 func main() {
 	c := handler.DefaultConfig
-
-	if c.Token == "" && os.Getenv("GH_TOKEN") != "" {
-		c.Token = os.Getenv("GH_TOKEN")
-	}
-	if c.ForceUser != "" {
-		log.Printf("locked user to '%s'", c.ForceUser)
-	}
-	if c.ForceRepo != "" {
-		log.Printf("locked repo to '%s'", c.ForceRepo)
-	}
 
 	lh := &handler.Handler{Config: c}
 	addr := fmt.Sprintf("%s:%d", c.Host, c.Port)

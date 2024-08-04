@@ -38,8 +38,8 @@ function install {
 	ASPROG="{{ .AsProgram }}"
 	DEFAULT_ARCH="{{ .Arch }}"
 	MOVE="{{ .MoveToPath }}"
-	RELEASE="{{ .Release }}"
 	PRIVATE="{{ .Private }}"
+	TOKEN=$GITHUB_TOKEN
 	INSECURE="{{ .Insecure }}"
 	OUT_DIR="{{ if .MoveToPath }}/usr/local/bin{{ else }}$(pwd){{ end }}"
 	GH="https://github.com"
@@ -70,13 +70,10 @@ function install {
 	if [ "$DEBUG" == "1" ]; then
 		GET="$GET -v"
 	fi
-	#optional auth to install from private repos
-	#NOTE: this also needs to be set on your instance of installer
-	AUTH="token ${GITHUB_TOKEN}"
-	
-	if [ "$PRIVATE" = "true" ]; then
-		GET="$GET -H 'Authorization: $AUTH' -H 'Accept: application/octet-stream'"
-	fi
+
+	if [ "$PRIVATE" = "true" ] && [ -n "$TOKEN" ]; then
+       GET="$GET -H 'Authorization: token $TOKEN' -H 'Accept: application/octet-stream'"
+    fi
 
 	#find OS #TODO BSDs and other posixs
 	case `uname -s` in
@@ -120,9 +117,7 @@ function install {
 	#got URL! download it...
 	echo -n "{{ if .MoveToPath }}Installing{{ else }}Downloading{{ end }}"
 	echo -n " $USER/$PROG"
-	if [ ! -z "$RELEASE" ]; then
-		echo -n " $RELEASE"
-	fi
+	echo -n " {{ .Version }}"
 	if [ ! -z "$ASPROG" ]; then
 		echo -n " as $ASPROG"
 	fi
@@ -159,30 +154,33 @@ function install {
 	else
 		fail "unknown file type: $FTYPE"
 	fi
-
-	if [ ! -z "$ASPROG" ]; then
-		DEST="$OUT_DIR/$ASPROG"
-		TMP_BIN=$(find . -type f -name "*$ASPROG*" | head -n 1 | cut -f 2)
-		if [ ! -f "$TMP_BIN" ]; then
-		fail "could not find binary"
-		fi
-		move $TMP_BIN $DEST
-	else
-		TMP_BIN_DIR=$(find . -type d -name "*bin*" | head -n 1 | cut -f 2)
-		if [ ! -d "$TMP_BIN_DIR" ]; then
-		   TMP_BIN=$(find . -type f | xargs du | sort -n | tail -n 1 | cut -f 2)
-		   if [ ! -f "$TMP_BIN" ]; then
-		   fail "could not find find binary (largest file)"
-		   fi
-		   move $TMP_BIN $OUT_DIR/$(basename $TMP_BIN)
-		else
-		   for f in $TMP_BIN_DIR/*; do
-			   if [ -x "$f" ]; then
-				   move $f $OUT_DIR/$(basename $f)
-			   fi
-		   done
-		fi
-	fi
+    if [ ! -z "$ASPROG" ]; then
+        # Split ASPROG into array using comma as delimiter
+        IFS=',' read -ra BINARIES <<< "$ASPROG"
+        
+        for BIN in "${BINARIES[@]}"; do
+            # Trim whitespace
+            BIN=$(echo "$BIN" | tr -d '[:space:]')
+            DEST="$OUT_DIR/$BIN"
+            # Search for the binary in entire directory structure
+            TMP_BIN=$(find . -type f -name "*$BIN*" | head -n 1)
+            if [ ! -f "$TMP_BIN" ]; then
+                fail "could not find binary: $BIN"
+            fi
+            move "$TMP_BIN" "$DEST"
+        done
+    else
+        # Find the largest executable file in the entire directory structure
+        TMP_BIN=$(find . -type f -executable | xargs du | sort -n | tail -n 1 | cut -f 2)
+        if [ ! -f "$TMP_BIN" ]; then
+            # If no executable foun d, just get the largest file
+            TMP_BIN=$(find . -type f | xargs du | sort -n | tail -n 1 | cut -f 2)
+            if [ ! -f "$TMP_BIN" ]; then
+                fail "could not find binary (largest file)"
+            fi
+        fi
+        move "$TMP_BIN" "$OUT_DIR/$(basename "$TMP_BIN")"
+    fi
 	cleanup
 }
 install
