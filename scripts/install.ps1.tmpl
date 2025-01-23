@@ -3,6 +3,8 @@ if ($env:DEBUG -eq "1") {
     $DebugPreference = "Continue"
 }
 
+$global:ProgressPreference = 'SilentlyContinue' 
+
 # Script parameters
 [string]$User = "{{ .User }}"
 [string]$Program = "{{ .Program }}"
