@@ -58,7 +58,7 @@ function install {
 	if which curl > /dev/null; then
 		GET="curl"
 		if [[ $INSECURE = "true" ]]; then GET="$GET --insecure"; fi
-		GET="$GET --fail -# -L"
+		GET="$GET --fail -L"
 	elif which wget > /dev/null; then
 		GET="wget"
 		if [[ $INSECURE = "true" ]]; then GET="$GET --no-check-certificate"; fi
