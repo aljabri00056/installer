@@ -77,12 +77,6 @@ func (h *Handler) detectProvider(path string) (provider, user string) {
 		}
 		return first, ""
 	default:
-		if len(parts) > 1 {
-			repoPath := path
-			if mappedProvider, ok := h.Config.RepoProviderMap[repoPath]; ok {
-				return mappedProvider, path
-			}
-		}
 		if h.Config.Provider != "" {
 			return h.Config.Provider, path
 		}
@@ -153,6 +147,10 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	path := strings.TrimPrefix(r.URL.Path, "/")
+
+	if p := h.Config.RepoPathMap[path]; p != "" {
+		path = p
+	}
 
 	detectedProvider, remainingPath := h.detectProvider(path)
 

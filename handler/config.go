@@ -7,12 +7,12 @@ import (
 )
 
 type Config struct {
-	Port            int               `opts:"help=port, env=HTTP_PORT"`
-	User            string            `opts:"help=default user when not provided in URL, env=DEFAULT_USER"`
-	Provider        string            `opts:"help=git provider (github,codeberg,forgejo), env=GIT_PROVIDER"`
-	ProviderURL     string            `opts:"help=base URL for forgejo/gitea instance, env=PROVIDER_URL"`
-	LogLevel        string            `opts:"help=log level (debug,info,warn,error), env=LOG_LEVEL"`
-	RepoProviderMap map[string]string `opts:"help=repository to provider mapping"`
+	Port        int               `opts:"help=port, env=HTTP_PORT"`
+	User        string            `opts:"help=default user when not provided in URL, env=DEFAULT_USER"`
+	Provider    string            `opts:"help=git provider (github,codeberg,forgejo), env=GIT_PROVIDER"`
+	ProviderURL string            `opts:"help=base URL for forgejo/gitea instance, env=PROVIDER_URL"`
+	LogLevel    string            `opts:"help=log level (debug,info,warn,error), env=LOG_LEVEL"`
+	RepoPathMap map[string]string `opts:"help=Path mapping"`
 }
 
 var DefaultConfig = Config{
@@ -41,12 +41,12 @@ func GetConfigFromEnv() Config {
 		config.LogLevel = logLevel
 	}
 
-	config.RepoProviderMap = make(map[string]string)
-	if mapStr := getEnv("REPO_PROVIDER_MAP", ""); mapStr != "" {
+	config.RepoPathMap = make(map[string]string)
+	if mapStr := getEnv("REPO_PATH_MAP", ""); mapStr != "" {
 		for _, mapping := range strings.Split(mapStr, ",") {
 			parts := strings.Split(mapping, "=")
 			if len(parts) == 2 {
-				config.RepoProviderMap[strings.TrimSpace(parts[0])] = strings.TrimSpace(parts[1])
+				config.RepoPathMap[strings.TrimSpace(parts[0])] = strings.TrimSpace(parts[1])
 			}
 		}
 	}
