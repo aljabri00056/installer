@@ -6,13 +6,14 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"github.com/divyam234/installer/logger"
 	"net/http"
 	"regexp"
 	"strings"
 	"sync"
 	"text/template"
 	"time"
+
+	"github.com/divyam234/installer/logger"
 
 	"github.com/divyam234/installer/handler/provider"
 	"github.com/divyam234/installer/scripts"
@@ -61,7 +62,7 @@ type Handler struct {
 	cache    map[string]Result
 }
 
-func detectProvider(path string) (provider, user string) {
+func (h *Handler) detectProvider(path string) (provider, user string) {
 	if path == "" {
 		return "github", ""
 	}
@@ -76,6 +77,15 @@ func detectProvider(path string) (provider, user string) {
 		}
 		return first, ""
 	default:
+		if len(parts) > 1 {
+			repoPath := path
+			if mappedProvider, ok := h.Config.RepoProviderMap[repoPath]; ok {
+				return mappedProvider, path
+			}
+		}
+		if h.Config.Provider != "" {
+			return h.Config.Provider, path
+		}
 		return "github", path
 	}
 }
@@ -144,7 +154,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	path := strings.TrimPrefix(r.URL.Path, "/")
 
-	detectedProvider, remainingPath := detectProvider(path)
+	detectedProvider, remainingPath := h.detectProvider(path)
 
 	switch detectedProvider {
 	case "github":
