@@ -5,18 +5,16 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
-	"os"
 	"regexp"
 	"strings"
 	"sync"
 	"text/template"
 	"time"
 
+	"github.com/divyam234/installer/handler/provider"
 	"github.com/divyam234/installer/scripts"
 )
 
@@ -25,20 +23,19 @@ const (
 )
 
 var (
-	isTermRe    = regexp.MustCompile(`(?i)^(curl|wget|.+WindowsPowerShell)\/`)
-	errMsgRe    = regexp.MustCompile(`[^A-Za-z0-9\ :\/\.]`)
-	errNotFound = errors.New("not found")
+	isTermRe = regexp.MustCompile(`(?i)^(curl|wget|.+WindowsPowerShell)\/`)
+	errMsgRe = regexp.MustCompile(`[^A-Za-z0-9\ :\/\.]`)
 )
 
 type Query struct {
-	User, Program, AsProgram, Release, Include, Arch, Token, Platform string
-	MoveToPath, Insecure, Private                                     bool
+	User, Program, AsProgram, Release, Include, Arch, Token, Platform, ProviderURL string
+	MoveToPath, Insecure, Private                                                  bool
 }
 
 type Result struct {
 	Query
 	Timestamp time.Time
-	Assets    Assets
+	Assets    []provider.Asset
 	Version   string
 	M1Asset   bool
 }
@@ -57,6 +54,25 @@ type Handler struct {
 	Config
 	cacheMut sync.Mutex
 	cache    map[string]Result
+}
+
+func detectProvider(path string) (provider, user string) {
+	if path == "" {
+		return "github", ""
+	}
+
+	parts := strings.SplitN(path, "/", 2)
+	first := strings.ToLower(parts[0])
+
+	switch first {
+	case "github", "codeberg", "forgejo":
+		if len(parts) > 1 {
+			return first, parts[1]
+		}
+		return first, ""
+	default:
+		return "github", path
+	}
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -121,21 +137,39 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// set query from route
 	path := strings.TrimPrefix(r.URL.Path, "/")
 
+	detectedProvider, remainingPath := detectProvider(path)
+
+	switch detectedProvider {
+	case "github":
+		q.ProviderURL = "https://github.com"
+	case "codeberg":
+		q.ProviderURL = "https://codeberg.org"
+	case "forgejo":
+		q.ProviderURL = h.Config.ProviderURL
+	default:
+		showError("Unknown provider", http.StatusBadRequest)
+		return
+	}
+
 	var rest string
-	q.User, rest = splitHalf(path, "/")
+	q.User, rest = splitHalf(remainingPath, "/")
 	q.Program, q.Release = splitHalf(rest, "@")
+
 	// no program? treat first part as program, use default user
 	if q.Program == "" {
 		q.Program = q.User
 		q.User = h.Config.User
 	}
+
+	if h.Config.Provider != "" {
+		detectedProvider = h.Config.Provider
+	}
 	if q.Release == "" {
 		q.Release = "latest"
 	}
-	// validate query
+
 	valid := q.Program != ""
 	if !valid && path == "" {
 		http.Redirect(w, r, "https://github.com/divyam234/installer", http.StatusMovedPermanently)
@@ -151,96 +185,35 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if len(split) > 1 {
 		q.Token = split[1]
 	}
-	if q.Token == "" {
-		q.Token = os.Getenv("GITHUB_TOKEN")
+	// if q.Token == "" {
+	// 	q.Token = os.Getenv("GITHUB_TOKEN")
+	// }
+	provider, err := provider.NewProvider(detectedProvider, h.Config.ProviderURL)
+	if err != nil {
+		showError(err.Error(), http.StatusBadRequest)
+		return
 	}
-	res, err := h.ghRepo(q.User, q.Program, q.Token)
+	res, err := provider.GetRepo(q.User, q.Program, q.Token)
 	if err != nil {
 		showError(err.Error(), http.StatusBadRequest)
 		return
 	}
 	q.Private = res.Private
-
-	// fetch assets
-	result, err := h.execute(q)
+	result, err := h.execute(provider, q)
 	if err != nil {
 		showError(err.Error(), http.StatusBadGateway)
 		return
 	}
-	// load template
 	t, err := template.New("installer").Parse(script)
 	if err != nil {
 		showError("installer BUG: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	// execute template
 	buff := bytes.Buffer{}
 	if err := t.Execute(&buff, result); err != nil {
 		showError("Template error: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	log.Printf("serving script %s/%s@%s (%s)", q.User, q.Program, q.Release, ext)
-	// ready
 	w.Write(buff.Bytes())
-}
-
-type Asset struct {
-	Name, OS, Arch, URL, Type string
-}
-
-func (a Asset) Key() string {
-	return a.OS + "/" + a.Arch
-}
-
-func (a Asset) Is32Bit() bool {
-	return a.Arch == "386"
-}
-
-func (a Asset) IsMac() bool {
-	return a.OS == "darwin"
-}
-
-func (a Asset) IsMacM1() bool {
-	return a.IsMac() && a.Arch == "arm64"
-}
-
-type Assets []Asset
-
-func (as Assets) HasM1() bool {
-	//detect if we have a native m1 asset
-	for _, a := range as {
-		if a.IsMacM1() {
-			return true
-		}
-	}
-	return false
-}
-
-func (h *Handler) get(url string, token string, v interface{}) error {
-	req, _ := http.NewRequest("GET", url, nil)
-	req.Header.Set("Accept", "application/vnd.github.v3+json")
-	if token != "" {
-		req.Header.Set("Authorization", "token "+token)
-	}
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return fmt.Errorf("request failed: %s: %s", url, err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == 404 {
-		return fmt.Errorf("%w: url %s", errNotFound, url)
-	}
-	if resp.StatusCode != 200 {
-		b, _ := io.ReadAll(resp.Body)
-		return errors.New(http.StatusText(resp.StatusCode) + " " + string(b))
-	}
-	if v != nil {
-		if err := json.NewDecoder(resp.Body).Decode(v); err != nil {
-			return fmt.Errorf("download failed: %s: %s", url, err)
-		}
-	}
-
-	return nil
 }

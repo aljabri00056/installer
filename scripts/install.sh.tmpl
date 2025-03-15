@@ -109,7 +109,7 @@ function install {
 	FTYPE=""
 	case "${OS}_${ARCH}" in{{ range .Assets }}
 	"{{ .OS }}_{{ .Arch }}")
-		URL="{{ .URL }}"
+		URL="{{ .DownloadURL }}"
 		FTYPE="{{ .Type }}"
 		;;{{end}}
 	*) fail "No asset for platform ${OS}-${ARCH}";;

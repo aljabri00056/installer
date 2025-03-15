@@ -1,45 +1,115 @@
 
 # `installer`
 
-Quickly install pre-compiled binaries from Github releases.
+Quickly install pre-compiled binaries from GitHub, Codeberg, or Forgejo releases with a single command.
 
-Installer is an HTTP server which returns shell scripts. The returned script will detect platform OS and architecture, choose from a selection of URLs, download the appropriate file, un(zip|tar|gzip) the file, find the binary (largest file) and optionally move it into your `PATH`. Useful for installing your favourite pre-compiled programs on hosts using only `curl`.
+Installer is an HTTP server which returns shell scripts. The returned script will:
+1. Detect platform OS and architecture
+2. Choose the appropriate binary from available URLs
+3. Download and extract the file (supports zip, tar, gz, bz2)
+4. Find and install the binary (optionally into your `PATH`)
+
+Perfect for installing pre-compiled programs on any host with just `curl` or `wget`.
 
 [![GoDev](https://img.shields.io/static/v1?label=godoc&message=reference&color=00add8)](https://pkg.go.dev/github.com/divyam234/installer)
 
-## Usage
+## Quick Start
 
 ```sh
-# install <user>/<repo> from github
-curl instl.vercel.app/<user>/<repo>@<release> | bash
+# Install latest release
+curl instl.vercel.app/user/repo | bash
+
+# Install specific release
+curl instl.vercel.app/user/repo@v1.2.3 | bash
+
+# Using wget
+wget -qO- instl.vercel.app/user/repo | bash
 ```
 
-*Or you can use* `wget -qO- <url> | bash`
+## Supported Providers
 
-**Path API**
-
-* `repo` Github repository belonging to `user` (**required**)
-* `release` Github release name (defaults to the **latest** release)
-* `move=0` When provided as query param, downloads binary directly into working directory  (defaults to `/usr/local/bin/`)
-* If no matching release is found you can  use `include="search term"` query param to filter release by search term.
-* Extract multiple binaries from archive by providing `as=binary1,binary2` query param.
 ```sh
-curl "https://instl.vercel.app/BtbN/FFmpeg-Builds?include=gpl-7.1&as=ffmpeg,ffprobe" | bash
+# GitHub (default)
+curl instl.vercel.app/github/user/repo | bash
+
+# Codeberg
+curl instl.vercel.app/codeberg/user/repo | bash
+
+# Forgejo/Gitea
+curl instl.vercel.app/forgejo/user/repo | bash
 ```
-## Windows (Run in PowerShell or Cmd)
+
+## Features
+
+### Installation Location
+- Installs to `/usr/local/bin` by default
+- Use `move=0` to download to current directory:
+  ```sh
+  curl "instl.vercel.app/user/repo?move=0" | bash
+  ```
+
+### Multiple Binaries
+Extract multiple binaries from an archive:
+```sh
+# Install both ffmpeg and ffprobe
+curl "instl.vercel.app/BtbN/FFmpeg-Builds?as=ffmpeg,ffprobe" | bash
+```
+
+### Release Filtering
+Filter releases by name:
+```sh
+# Only consider releases containing "gpl"
+curl "instl.vercel.app/user/repo?include=gpl" | bash
+```
+
+### Platform Selection
+Force specific platform:
+```sh
+# Force Windows binary
+curl "instl.vercel.app/user/repo?platform=windows" | bash
+```
+
+### Architecture Selection
+Force specific architecture:
+```sh
+# Force arm64 binary
+curl "instl.vercel.app/user/repo?arch=arm64" | bash
+```
+
+## Windows Support
+Run in PowerShell:
 ```powershell
-powershell -c "irm https://instl.vercel.app/rclone/rclone?platform=windows|iex"
+# Standard installation
+powershell -c "irm instl.vercel.app/user/repo?platform=windows | iex"
+
+# With options
+powershell -c "irm 'instl.vercel.app/user/repo?platform=windows&move=0' | iex"
 ```
 
-## Examples
-
-* instl.vercel.app/yudai/gotty@v0.0.12
-* instl.vercel.app/mholt/caddy
-* instl.vercel.app/rclone/rclone
-
-## Private repos
-
-You'll have to set pass github token in `GITHUB_TOKEN` env var.
+## Private Repositories
+Access private repos by setting a GitHub token:
 ```sh
-GITHUB_TOKEN=token curl -H "Authorization: Bearer $GITHUB_TOKEN" instl.vercel.app/private/private-repo
+# Via environment variable
+export GITHUB_TOKEN="your-token"
+curl instl.vercel.app/user/private-repo | bash
+
+# Or via Authorization header
+curl -H "Authorization: Bearer your-token" instl.vercel.app/user/private-repo | bash
+```
+
+## Popular Examples
+
+### Command Line Tools
+```sh
+# Install Micro editor
+curl instl.vercel.app/zyedidia/micro | bash
+
+# Install Rclone
+curl instl.vercel.app/rclone/rclone | bash
+
+# Install Hugo
+curl instl.vercel.app/gohugoio/hugo | bash
+
+# Install gotty
+curl instl.vercel.app/yudai/gotty@v0.0.12 | bash
 ```

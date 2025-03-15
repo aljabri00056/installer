@@ -1,4 +1,4 @@
-repository: https://github.com/{{ .User }}/{{ .Program }}
+repository: {{ .ProviderURL}}/{{ .User }}/{{ .Program }}
 user: {{ .User }}
 program: {{ .Program }}{{if .AsProgram }}
 as: {{ .AsProgram }}{{end}}
@@ -9,7 +9,7 @@ platform: {{ .Platform }}
 
 release assets:
 {{ range .Assets }}  {{ .Key }}
-    url:    {{ .URL }}
+    url:    {{ .DownloadURL }}
 {{end}}
 has-m1-asset: {{ .M1Asset }}
 

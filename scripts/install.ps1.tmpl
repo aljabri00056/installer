@@ -123,7 +123,7 @@ function Install-Binary {
     $assetMap = @{
         {{ range .Assets }}
         "{{ .OS }}_{{ .Arch }}" = @{
-            "URL" = "{{ .URL }}"
+            "URL" = "{{ .DownloadURL }}"
             "Type" = "{{ .Type }}"
         }
         {{end}}
