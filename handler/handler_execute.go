@@ -2,11 +2,11 @@ package handler
 
 import (
 	"errors"
-	"log"
 	"strings"
 	"time"
 
 	"github.com/divyam234/installer/handler/provider"
+	"github.com/divyam234/installer/logger"
 )
 
 func (h *Handler) execute(provider provider.Provider, q Query) (Result, error) {
@@ -28,7 +28,7 @@ func (h *Handler) execute(provider provider.Provider, q Query) (Result, error) {
 		return Result{}, err
 	}
 	if q.Release == "" && release != "" {
-		log.Printf("detected release: %s", release)
+		logger.Debug("detected release: %s", release)
 		q.Release = release
 	}
 	hasM1Asset := false
@@ -57,7 +57,7 @@ func (h *Handler) getAssets(_provider provider.Provider, q Query) (string, []pro
 	repo := q.Program
 	release := q.Release
 
-	log.Printf("fetching asset info for %s/%s@%s", user, repo, release)
+	logger.Debug("fetching asset info for %s/%s@%s", user, repo, release)
 
 	version, assets, err := _provider.GetReleaseAssets(user, repo, release, q.Token)
 	if err != nil {
@@ -83,7 +83,7 @@ func (h *Handler) getAssets(_provider provider.Provider, q Query) (string, []pro
 		switch fext {
 		case ".bin", ".zip", ".tar.bz", ".tar.bz2", ".bz2", ".gz", ".tar.gz", ".tgz", ".tar.xz":
 		default:
-			log.Printf("fetched asset has unsupported file type: %s (ext '%s')", asset.Name, fext)
+			logger.Debug("fetched asset has unsupported file type: %s (ext '%s')", asset.Name, fext)
 			continue
 		}
 
@@ -104,14 +104,14 @@ func (h *Handler) getAssets(_provider provider.Provider, q Query) (string, []pro
 		arch := getArch(asset.Name)
 
 		if os == "" {
-			log.Printf("fetched asset has unknown os: %s", asset.Name)
+			logger.Debug("fetched asset has unknown os: %s", asset.Name)
 			continue
 		}
 		if arch == "" {
 			continue
 		}
 
-		log.Printf("fetched asset: %s", asset.Name)
+		logger.Debug("fetched asset: %s", asset.Name)
 
 		asset.OS = os
 		asset.Arch = arch

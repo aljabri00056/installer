@@ -7,7 +7,7 @@ import (
 )
 
 func Handler(w http.ResponseWriter, r *http.Request) {
-	c := handler.DefaultConfig
+	c := handler.GetConfigFromEnv()
 
 	h := &handler.Handler{Config: c}
 

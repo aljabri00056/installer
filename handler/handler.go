@@ -6,7 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"log"
+	"github.com/divyam234/installer/logger"
 	"net/http"
 	"regexp"
 	"strings"
@@ -181,7 +181,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, "https://github.com/divyam234/installer", http.StatusMovedPermanently)
 			return
 		}
-		log.Printf("invalid path: query: %+v", q)
+		logger.Debug("invalid path: query: %+v", q)
 		showError("Invalid path - must specify program name", http.StatusBadRequest)
 		return
 	}
@@ -219,6 +219,6 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		showError("Template error: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	log.Printf("serving script %s/%s@%s (%s)", q.User, q.Program, q.Release, ext)
+	logger.Info("serving script %s/%s@%s (%s)", q.User, q.Program, q.Release, ext)
 	w.Write(buff.Bytes())
 }
