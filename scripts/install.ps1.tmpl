@@ -160,17 +160,25 @@ function Install-Binary {
             }
         }
 
-       # In the binary finding and moving section, replace the existing if ($AsProgram) block with:
         if ($AsProgram) {
             # Split AsProgram into array using comma as delimiter
             $binaries = $AsProgram -split ',' | ForEach-Object { $_.Trim() }
             
             foreach ($binName in $binaries) {
-                # Search for each binary across all directories
-                $binary = Get-ChildItem -Recurse -Filter "*$binName*.exe" | Select-Object -First 1
+                # Search for binary with exact name first
+                $binary = Get-ChildItem -Recurse -Filter "$binName.exe" | Select-Object -First 1
+                
+                # If not found, try partial match
                 if (-not $binary) {
-                    Fail "Could not find binary: $binName"
+                    $binary = Get-ChildItem -Recurse | Where-Object {
+                        $_.Name -like "*$binName*.exe" -and (-not $_.PSIsContainer)
+                    } | Sort-Object Length -Descending | Select-Object -First 1
                 }
+                
+                if (-not $binary) {
+                    Fail "Could not find binary matching: $binName"
+                }
+                
                 $destination = Join-Path $OutDir "$binName.exe"
                 Move-Binary $binary.FullName $destination
             }

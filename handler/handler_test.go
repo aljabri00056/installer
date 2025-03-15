@@ -90,3 +90,23 @@ func TestMicroInstallAs(t *testing.T) {
 	}
 	t.Log(string(out))
 }
+
+func TestInvalidPath(t *testing.T) {
+	h := &handler.Handler{}
+	r := httptest.NewRequest("GET", "/?type=script", nil)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Result().StatusCode != 302 {
+		t.Fatalf("expected redirect for empty path")
+	}
+}
+
+func TestInvalidProvider(t *testing.T) {
+	h := &handler.Handler{}
+	r := httptest.NewRequest("GET", "/invalid-provider/user/repo", nil)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Result().StatusCode != 400 {
+		t.Fatalf("expected bad request for invalid provider")
+	}
+}

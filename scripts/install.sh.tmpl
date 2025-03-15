@@ -162,11 +162,24 @@ function install {
             # Trim whitespace
             BIN=$(echo "$BIN" | tr -d '[:space:]')
             DEST="$OUT_DIR/$BIN"
-            # Search for the binary in entire directory structure
-            TMP_BIN=$(find . -type f -name "*$BIN*" | head -n 1)
+            
+            # First try exact match
+            TMP_BIN=$(find . -type f -name "$BIN" 2>/dev/null | head -n 1)
+            
+            # If not found, try partial match
             if [ ! -f "$TMP_BIN" ]; then
-                fail "could not find binary: $BIN"
+                TMP_BIN=$(find . -type f -name "*$BIN*" 2>/dev/null | sort -r -n | head -n 1)
             fi
+            
+            if [ ! -f "$TMP_BIN" ]; then
+                # Try case-insensitive search as last resort
+                TMP_BIN=$(find . -type f -iname "*$BIN*" 2>/dev/null | sort -r -n | head -n 1)
+            fi
+            
+            if [ ! -f "$TMP_BIN" ]; then
+                fail "could not find binary matching: $BIN"
+            fi
+            
             move "$TMP_BIN" "$DEST"
         done
     else

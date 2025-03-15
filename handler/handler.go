@@ -20,6 +20,11 @@ import (
 
 const (
 	cacheTTL = time.Hour
+
+	ErrInvalidPath     = "Invalid path - must specify program name"
+	ErrUnknownType     = "Unknown response type requested"
+	ErrUnknownProvider = "Unknown provider specified"
+	ErrProviderURL     = "Provider URL is required for Forgejo"
 )
 
 var (
@@ -171,13 +176,13 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	valid := q.Program != ""
-	if !valid && path == "" {
-		http.Redirect(w, r, "https://github.com/divyam234/installer", http.StatusMovedPermanently)
-		return
-	}
 	if !valid {
-		log.Printf("invalid path: query: %#v", q)
-		showError("Invalid path", http.StatusBadRequest)
+		if path == "" {
+			http.Redirect(w, r, "https://github.com/divyam234/installer", http.StatusMovedPermanently)
+			return
+		}
+		log.Printf("invalid path: query: %+v", q)
+		showError("Invalid path - must specify program name", http.StatusBadRequest)
 		return
 	}
 

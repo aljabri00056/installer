@@ -29,10 +29,14 @@ type ghRepo struct {
 }
 
 func (g *GitHub) GetRepo(user, repo, token string) (*RepoInfo, error) {
+	if user == "" || repo == "" {
+		return nil, fmt.Errorf("user and repo are required")
+	}
+	
 	url := fmt.Sprintf(g.BaseURL+"/repos/%s/%s", user, repo)
 	var res ghRepo
 	if err := g.get(url, token, &res); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get repo info: %w", err)
 	}
 	return &RepoInfo{Private: res.Private}, nil
 }
