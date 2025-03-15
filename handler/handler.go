@@ -71,7 +71,7 @@ func (h *Handler) detectProvider(path string) (provider, user string) {
 	first := strings.ToLower(parts[0])
 
 	switch first {
-	case "github", "codeberg", "forgejo":
+	case "github", "codeberg", "forgejo", "gitlab":
 		if len(parts) > 1 {
 			return first, parts[1]
 		}
@@ -159,6 +159,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		q.ProviderURL = "https://github.com"
 	case "codeberg":
 		q.ProviderURL = "https://codeberg.org"
+	case "gitlab":
+		q.ProviderURL = "https://gitlab.com"
 	case "forgejo":
 		q.ProviderURL = h.Config.ProviderURL
 	default:
