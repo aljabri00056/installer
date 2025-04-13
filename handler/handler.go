@@ -200,9 +200,9 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if len(split) > 1 {
 		q.Token = split[1]
 	}
-	// if q.Token == "" {
-	// 	q.Token = os.Getenv("GITHUB_TOKEN")
-	// }
+	if q.Token == "" {
+	  q.Token = os.Getenv("GITHUB_TOKEN")
+	}
 	provider, err := provider.NewProvider(detectedProvider, h.Config.ProviderURL)
 	if err != nil {
 		showError(err.Error(), http.StatusBadRequest)
