@@ -201,7 +201,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if len(split) > 1 {
 		q.Token = split[1]
 	}
-	if q.Token == "" {
+	if q.Token == "" && detectedProvider == "github" {
 	  q.Token = os.Getenv("GITHUB_TOKEN")
 	}
 	provider, err := provider.NewProvider(detectedProvider, h.Config.ProviderURL)
