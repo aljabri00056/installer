@@ -228,8 +228,8 @@ function install {
 		bash -c "$GET '$URL'" > tmp.zip || fail "download failed" 1
 		unzip_dir="tmp_unzip_dir"
 		unzip -a tmp.zip -d "$unzip_dir" || fail "unzip failed" 1
+		rm tmp.zip || fail "cleanup failed" 1
 		cd "$unzip_dir"/* || fail "failed to enter unzipped directory" 1
-		rm ../tmp.zip || fail "cleanup failed" 1
 	elif [[ $FTYPE = ".bin" ]]; then
 		bash -c "$GET '$URL'" > "{{ .Program }}_${OS}_${ARCH}" || fail "download failed" 1
 	else
