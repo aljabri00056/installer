@@ -6,7 +6,7 @@ import (
 	"os/exec"
 	"testing"
 
-	"github.com/divyam234/installer/handler"
+	"github.com/aljabri00056/installer/handler"
 )
 
 func TestJPilloraServe(t *testing.T) {

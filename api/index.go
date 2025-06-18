@@ -3,7 +3,7 @@ package api
 import (
 	"net/http"
 
-	"github.com/divyam234/installer/handler"
+	"github.com/aljabri00056/installer/handler"
 )
 
 func Handler(w http.ResponseWriter, r *http.Request) {

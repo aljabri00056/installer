@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/divyam234/installer/handler"
-	"github.com/divyam234/installer/logger"
+	"github.com/aljabri00056/installer/handler"
+	"github.com/aljabri00056/installer/logger"
 )
 
 func main() {

@@ -14,10 +14,10 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/divyam234/installer/logger"
+	"github.com/aljabri00056/installer/logger"
 
-	"github.com/divyam234/installer/handler/provider"
-	"github.com/divyam234/installer/scripts"
+	"github.com/aljabri00056/installer/handler/provider"
+	"github.com/aljabri00056/installer/scripts"
 )
 
 const (
@@ -189,7 +189,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	valid := q.Program != ""
 	if !valid {
 		if path == "" {
-			http.Redirect(w, r, "https://github.com/divyam234/installer", http.StatusMovedPermanently)
+			http.Redirect(w, r, "https://github.com/aljabri00056/installer", http.StatusMovedPermanently)
 			return
 		}
 		logger.Debug("invalid path: query: %+v", q)

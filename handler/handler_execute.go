@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/divyam234/installer/handler/provider"
-	"github.com/divyam234/installer/logger"
+	"github.com/aljabri00056/installer/handler/provider"
+	"github.com/aljabri00056/installer/logger"
 )
 
 func (h *Handler) execute(provider provider.Provider, q Query) (Result, error) {

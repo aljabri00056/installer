@@ -1,3 +1,3 @@
-module github.com/divyam234/installer
+module github.com/aljabri00056/installer
 
 go 1.21
