@@ -1,38 +1,51 @@
-#!/bin/bash
+#!/usr/bin/env bash
+
+# error codes
+# 0 - exited without problems
+# 1 - parameters not supported were used or some unexpected error occurred
+# 2 - OS not supported by this script
+# 3 - required dependencies not available
+# 4 - supported archive tools are not available
+
+set -e
+
 if [ "$DEBUG" == "1" ]; then
 	set -x
 fi
-TMP_DIR=$(mktemp -d -t installer-XXXXXXXXXX)
+
+# Create tmp directory with macOS compatibility fallback
+TMP_DIR=$(mktemp -d 2>/dev/null || mktemp -d -t 'installer.XXXXXXXXXX')
+
 function cleanup {
-	rm -rf $TMP_DIR > /dev/null
+	rm -rf "$TMP_DIR" >/dev/null 2>&1 || true
 }
+
 function fail {
 	cleanup
 	msg=$1
 	echo "============"
 	echo "Error: $msg" 1>&2
-	exit 1
-}	
+	exit "${2:-1}"
+}
+
 function move {
-	#move into PATH or cwd
-	chmod +x $1 || fail "chmod +x failed"
-	#move without sudo
-	OUT=$(mv $1 $2 2>&1)
-	STATUS=$?
-	# failed and string contains "Permission denied"
-	if [ $STATUS -ne 0 ]; then
-		if [[ $OUT =~ "Permission denied" ]]; then
-			echo "mv with sudo..."
-			sudo mv $1 $2 || fail "sudo mv failed" 
-		else
-			fail "mv failed ($OUT)"
-		fi
+	# Move into PATH or cwd with proper permission handling
+	chmod +x "$1" || fail "chmod +x failed" 1
+	
+	# Try to move without sudo first
+	if mv "$1" "$2" 2>/dev/null; then
+		echo "{{ if .MoveToPath }}Installed at{{ else }}Downloaded to{{ end }} $2"
+		return 0
 	fi
-	echo "{{ if .MoveToPath }}Installed at{{ else }}Downloaded to{{ end }} $2"     
+	
+	# If that fails, try with sudo
+	echo "Moving with sudo..."
+	sudo mv "$1" "$2" || fail "sudo mv failed" 1
+	echo "{{ if .MoveToPath }}Installed at{{ else }}Downloaded to{{ end }} $2"
 }
 
 function install {
-	#settings
+	# Settings
 	USER="{{ .User }}"
 	PROG="{{ .Program }}"
 	ASPROG="{{ .AsProgram }}"
@@ -43,68 +56,126 @@ function install {
 	INSECURE="{{ .Insecure }}"
 	OUT_DIR="{{ if .MoveToPath }}/usr/bin{{ else }}$(pwd){{ end }}"
 	GH="https://github.com"
-	#bash check
-	[ ! "$BASH_VERSION" ] && fail "Please use bash instead"
-	[ ! -d $OUT_DIR ] && fail "output directory missing: $OUT_DIR"
-	#dependency check, assume we are a standard POISX machine
-	which find > /dev/null || fail "find not installed"
-	which xargs > /dev/null || fail "xargs not installed"
-	which sort > /dev/null || fail "sort not installed"
-	which tail > /dev/null || fail "tail not installed"
-	which cut > /dev/null || fail "cut not installed"
-	which du > /dev/null || fail "du not installed"
-	#choose an HTTP client
+	
+	# Bash check
+	[ ! "$BASH_VERSION" ] && fail "Please use bash instead" 1
+	
+	archive_tools_list=('unzip' 'tar')
+	
+	# Check for required archive tools
+	set +e
+	archive_tool=""
+	for tool in "${archive_tools_list[@]}"; do
+		if command -v "$tool" >/dev/null 2>&1; then
+			archive_tool="$tool"
+			break
+		fi
+	done
+	set -e
+	
+	# Exit if no archive tools available
+	if [ -z "$archive_tool" ]; then
+		printf "\nNone of the supported tools for extracting archives (%s) were found.\n" "${archive_tools_list[*]}"
+		printf "Please install one of them and try again.\n\n"
+		fail "Required archive tools not available" 4
+	fi
+	
+	# Dependency check - assume we are a standard POSIX machine
+	deps=("find" "xargs" "sort" "tail" "cut" "du")
+	for dep in "${deps[@]}"; do
+		command -v "$dep" >/dev/null || fail "$dep not installed" 3
+	done
+	# Choose an HTTP client
 	GET=""
-	if which curl > /dev/null; then
+	if command -v curl >/dev/null 2>&1; then
 		GET="curl"
-		if [[ $INSECURE = "true" ]]; then GET="$GET --insecure"; fi
+		if [[ $INSECURE = "true" ]]; then 
+			GET="$GET --insecure"
+		fi
 		GET="$GET --fail -s -L"
-	elif which wget > /dev/null; then
+	elif command -v wget >/dev/null 2>&1; then
 		GET="wget"
-		if [[ $INSECURE = "true" ]]; then GET="$GET --no-check-certificate"; fi
+		if [[ $INSECURE = "true" ]]; then 
+			GET="$GET --no-check-certificate"
+		fi
 		GET="$GET -qO-"
 	else
-		fail "neither wget/curl are installed"
+		fail "neither wget nor curl are installed" 3
 	fi
-	#debug HTTP
+	
+	# Debug HTTP
 	if [ "$DEBUG" == "1" ]; then
 		GET="$GET -v"
 	fi
 
 	if [ "$PRIVATE" = "true" ] && [ -n "$TOKEN" ]; then
-       GET="$GET -H 'Authorization: token $TOKEN' -H 'Accept: application/octet-stream'"
-    fi
-
-	#find OS #TODO BSDs and other posixs
-	case `uname -s` in
-	Darwin) OS="darwin";;
-	Linux) OS="linux";;
-	*) fail "unknown os: $(uname -s)";;
-	esac
-	#find ARCH
-	if uname -m | grep -E '(arm|arch)64' > /dev/null; then
-		ARCH="arm64"
-		{{ if not .M1Asset }}
-		# no m1 assets. if on mac arm64, rosetta allows fallback to amd64
-		if [[ $OS = "darwin" ]]; then
-			ARCH="amd64"
-		fi
-		{{ end }}
-	elif uname -m | grep 64 > /dev/null; then
-		ARCH="amd64"
-	elif uname -m | grep arm > /dev/null; then
-		ARCH="arm" #TODO armv6/v7
-	elif uname -m | grep 386 > /dev/null; then
-		ARCH="386"
-	else
-		fail "unknown arch: $(uname -m)"
+		GET="$GET -H 'Authorization: token $TOKEN' -H 'Accept: application/octet-stream'"
 	fi
+
+	# Detect the platform
+	OS="$(uname)"
+	case $OS in
+		Linux)
+			OS='linux'
+			;;
+		FreeBSD)
+			OS='freebsd'
+			;;
+		NetBSD)
+			OS='netbsd'
+			;;
+		OpenBSD)
+			OS='openbsd'
+			;;  
+		Darwin)
+			OS='osx'
+			OUT_DIR="{{ if .MoveToPath }}/usr/local/bin{{ else }}$(pwd){{ end }}"
+			;;
+		*)
+			fail "OS not supported: $(uname -s)" 2
+			;;
+	esac
 	
-	if [ ! -z "$DEFAULT_ARCH" ]; then
+	# Output directory check
+	[ ! -d "$OUT_DIR" ] && fail "output directory missing: $OUT_DIR" 1
+	
+	# Detect architecture
+	OS_type="$(uname -m)"
+	case "$OS_type" in
+		x86_64|amd64)
+			ARCH='amd64'
+			;;
+		i?86|x86)
+			ARCH='386'
+			;;
+		aarch64|arm64)
+			ARCH='arm64'
+			{{ if not .M1Asset }}
+			# No M1 assets. If on Mac arm64, Rosetta allows fallback to amd64
+			if [[ $OS = "osx" ]]; then
+				ARCH="amd64"
+			fi
+			{{ end }}
+			;;
+		armv7*)
+			ARCH='arm-v7'
+			;;
+		armv6*)
+			ARCH='arm-v6'
+			;;
+		arm*)
+			ARCH='arm'
+			;;
+		*)
+			fail "Architecture not supported: $(uname -m)" 2
+			;;
+	esac
+	
+	if [ -n "$DEFAULT_ARCH" ]; then
 		ARCH="$DEFAULT_ARCH"
 	fi
 
-	#choose from asset list
+	# Choose from asset list
 	URL=""
 	FTYPE=""
 	case "${OS}_${ARCH}" in{{ range .Assets }}
@@ -112,88 +183,98 @@ function install {
 		URL="{{ .DownloadURL }}"
 		FTYPE="{{ .Type }}"
 		;;{{end}}
-	*) fail "No asset for platform ${OS}-${ARCH}";;
+	*) fail "No asset for platform ${OS}-${ARCH}" 2;;
 	esac
-	#got URL! download it...
+	
+	# Got URL! Download it...
 	echo -n "{{ if .MoveToPath }}Installing{{ else }}Downloading{{ end }}"
 	echo -n " $USER/$PROG"
 	echo -n " {{ .Version }}"
-	if [ ! -z "$ASPROG" ]; then
+	if [ -n "$ASPROG" ]; then
 		echo -n " as $ASPROG"
 	fi
-	echo -n " (${OS}/${ARCH})"
+	echo " (${OS}/${ARCH})"
 	
-	#enter tempdir
-	mkdir -p $TMP_DIR
-	cd $TMP_DIR
+	# Enter temp directory
+	mkdir -p "$TMP_DIR"
+	cd "$TMP_DIR"
+	# Download and extract based on file type
 	if [[ $FTYPE = ".gz" ]]; then
-		which gzip > /dev/null || fail "gzip is not installed"
-		bash -c "$GET $URL" | gzip -d - > $PROG || fail "download failed"
+		command -v gzip >/dev/null || fail "gzip is not installed" 3
+		bash -c "$GET '$URL'" | gzip -d - > "$PROG" || fail "download failed" 1
 	elif [[ $FTYPE = ".bz2" ]]; then
-		which bzip2 > /dev/null || fail "bzip2 is not installed"
-		bash -c "$GET $URL" | bzip2 -d - > $PROG || fail "download failed"
+		command -v bzip2 >/dev/null || fail "bzip2 is not installed" 3
+		bash -c "$GET '$URL'" | bzip2 -d - > "$PROG" || fail "download failed" 1
 	elif [[ $FTYPE = ".tar.bz" ]] || [[ $FTYPE = ".tar.bz2" ]]; then
-		which tar > /dev/null || fail "tar is not installed"
-		which bzip2 > /dev/null || fail "bzip2 is not installed"
-		bash -c "$GET $URL" | tar jxf - || fail "download failed"
+		command -v tar >/dev/null || fail "tar is not installed" 3
+		command -v bzip2 >/dev/null || fail "bzip2 is not installed" 3
+		bash -c "$GET '$URL'" | tar jxf - || fail "download failed" 1
 	elif [[ $FTYPE = ".tar.gz" ]] || [[ $FTYPE = ".tgz" ]]; then
-		which tar > /dev/null || fail "tar is not installed"
-		which gzip > /dev/null || fail "gzip is not installed"
-		bash -c "$GET $URL" | tar zxf - || fail "download failed"
+		command -v tar >/dev/null || fail "tar is not installed" 3
+		command -v gzip >/dev/null || fail "gzip is not installed" 3
+		bash -c "$GET '$URL'" | tar zxf - || fail "download failed" 1
 	elif [[ $FTYPE = ".tar.xz" ]] || [[ $FTYPE = ".txz" ]]; then
-		which tar > /dev/null || fail "tar is not installed"
-		which xz > /dev/null || fail "xz is not installed"
-		bash -c "$GET $URL" | tar -xJf - || fail "download failed"
+		command -v tar >/dev/null || fail "tar is not installed" 3
+		command -v xz >/dev/null || fail "xz is not installed" 3
+		bash -c "$GET '$URL'" | tar -xJf - || fail "download failed" 1
 	elif [[ $FTYPE = ".zip" ]]; then
-		which unzip > /dev/null || fail "unzip is not installed"
-		bash -c "$GET $URL" > tmp.zip || fail "download failed"
-		unzip -o -qq tmp.zip || fail "unzip failed"
-		rm tmp.zip || fail "cleanup failed"
+		command -v unzip >/dev/null || fail "unzip is not installed" 3
+		bash -c "$GET '$URL'" > tmp.zip || fail "download failed" 1
+		unzip_dir="tmp_unzip_dir"
+		unzip -a tmp.zip -d "$unzip_dir" || fail "unzip failed" 1
+		cd "$unzip_dir"/* || fail "failed to enter unzipped directory" 1
+		rm ../tmp.zip || fail "cleanup failed" 1
 	elif [[ $FTYPE = ".bin" ]]; then
-		bash -c "$GET $URL" > "{{ .Program }}_${OS}_${ARCH}" || fail "download failed"
+		bash -c "$GET '$URL'" > "{{ .Program }}_${OS}_${ARCH}" || fail "download failed" 1
 	else
-		fail "unknown file type: $FTYPE"
+		fail "unknown file type: $FTYPE" 1
 	fi
-    if [ ! -z "$ASPROG" ]; then
-        # Split ASPROG into array using comma as delimiter
-        IFS=',' read -ra BINARIES <<< "$ASPROG"
-        
-        for BIN in "${BINARIES[@]}"; do
-            # Trim whitespace
-            BIN=$(echo "$BIN" | tr -d '[:space:]')
-            DEST="$OUT_DIR/$BIN"
-            
-            # First try exact match
-            TMP_BIN=$(find . -type f -name "$BIN" 2>/dev/null | head -n 1)
-            
-            # If not found, try partial match
-            if [ ! -f "$TMP_BIN" ]; then
-                TMP_BIN=$(find . -type f -name "*$BIN*" 2>/dev/null | sort -r -n | head -n 1)
-            fi
-            
-            if [ ! -f "$TMP_BIN" ]; then
-                # Try case-insensitive search as last resort
-                TMP_BIN=$(find . -type f -iname "*$BIN*" 2>/dev/null | sort -r -n | head -n 1)
-            fi
-            
-            if [ ! -f "$TMP_BIN" ]; then
-                fail "could not find binary matching: $BIN"
-            fi
-            
-            move "$TMP_BIN" "$DEST"
-        done
-    else
-        # Find the largest executable file in the entire directory structure
-        TMP_BIN=$(find . -type f -executable | xargs du | sort -n | tail -n 1 | cut -f 2)
-        if [ ! -f "$TMP_BIN" ]; then
-            # If no executable foun d, just get the largest file
-            TMP_BIN=$(find . -type f | xargs du | sort -n | tail -n 1 | cut -f 2)
-            if [ ! -f "$TMP_BIN" ]; then
-                fail "could not find binary (largest file)"
-            fi
-        fi
-        move "$TMP_BIN" "$OUT_DIR/$(basename "$TMP_BIN")"
-    fi
+	# Install binaries
+	if [ -n "$ASPROG" ]; then
+		# Split ASPROG into array using comma as delimiter
+		IFS=',' read -ra BINARIES <<< "$ASPROG"
+		
+		for BIN in "${BINARIES[@]}"; do
+			# Trim whitespace
+			BIN=$(echo "$BIN" | tr -d '[:space:]')
+			DEST="$OUT_DIR/$BIN"
+			
+			# First try exact match
+			TMP_BIN=$(find . -type f -name "$BIN" 2>/dev/null | head -n 1)
+			
+			# If not found, try partial match
+			if [ ! -f "$TMP_BIN" ]; then
+				TMP_BIN=$(find . -type f -name "*$BIN*" 2>/dev/null | sort -rn | head -n 1)
+			fi
+			
+			# Try case-insensitive search as last resort
+			if [ ! -f "$TMP_BIN" ]; then
+				TMP_BIN=$(find . -type f -iname "*$BIN*" 2>/dev/null | sort -rn | head -n 1)
+			fi
+			
+			if [ ! -f "$TMP_BIN" ]; then
+				fail "could not find binary matching: $BIN" 1
+			fi
+			
+			move "$TMP_BIN" "$DEST"
+		done
+	else
+		# Find the largest executable file in the entire directory structure
+		# Use -perm for compatibility with both BSD (macOS) and GNU (Linux) find
+		TMP_BIN=$(find . -type f \( -perm -u+x -o -perm -g+x -o -perm -o+x \) 2>/dev/null | xargs du 2>/dev/null | sort -n | tail -n 1 | cut -f 2)
+		if [ ! -f "$TMP_BIN" ]; then
+			# If no executable found, just get the largest file
+			TMP_BIN=$(find . -type f | xargs du 2>/dev/null | sort -n | tail -n 1 | cut -f 2)
+			if [ ! -f "$TMP_BIN" ]; then
+				fail "could not find binary (largest file)" 1
+			fi
+		fi
+		move "$TMP_BIN" "$OUT_DIR/$(basename "$TMP_BIN")"
+	fi
+	
 	cleanup
+	echo
+	echo "Installation completed successfully!"
 }
+
 install
