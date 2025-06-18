@@ -25,6 +25,14 @@ func (a Asset) Key() string {
 	return a.OS + "/" + a.Arch
 }
 
+func (a Asset) DisplayKey() string {
+	os := a.OS
+	if os == "darwin" {
+		os = "macOS"
+	}
+	return os + "/" + a.Arch
+}
+
 func (a Asset) Is32Bit() bool {
 	return a.Arch == "386"
 }

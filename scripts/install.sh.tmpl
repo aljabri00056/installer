@@ -128,7 +128,7 @@ function install {
 			OS='openbsd'
 			;;  
 		Darwin)
-			OS='osx'
+			OS='darwin'
 			OUT_DIR="{{ if .MoveToPath }}/usr/local/bin{{ else }}$(pwd){{ end }}"
 			;;
 		*)
@@ -152,7 +152,7 @@ function install {
 			ARCH='arm64'
 			{{ if not .M1Asset }}
 			# No M1 assets. If on Mac arm64, Rosetta allows fallback to amd64
-			if [[ $OS = "osx" ]]; then
+			if [[ $OS = "darwin" ]]; then
 				ARCH="amd64"
 			fi
 			{{ end }}
@@ -175,6 +175,12 @@ function install {
 		ARCH="$DEFAULT_ARCH"
 	fi
 
+	# Create display-friendly OS name for user messages
+	DISPLAY_OS="$OS"
+	if [[ $OS = "darwin" ]]; then
+		DISPLAY_OS="macOS"
+	fi
+
 	# Choose from asset list
 	URL=""
 	FTYPE=""
@@ -183,7 +189,7 @@ function install {
 		URL="{{ .DownloadURL }}"
 		FTYPE="{{ .Type }}"
 		;;{{end}}
-	*) fail "No asset for platform ${OS}-${ARCH}" 2;;
+	*) fail "No asset for platform ${DISPLAY_OS}-${ARCH}" 2;;
 	esac
 	
 	# Got URL! Download it...
@@ -193,7 +199,7 @@ function install {
 	if [ -n "$ASPROG" ]; then
 		echo -n " as $ASPROG"
 	fi
-	echo " (${OS}/${ARCH})"
+	echo " (${DISPLAY_OS}/${ARCH})"
 	
 	# Enter temp directory
 	mkdir -p "$TMP_DIR"

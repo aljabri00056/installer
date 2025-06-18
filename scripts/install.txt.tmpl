@@ -8,7 +8,7 @@ private: {{ .Private }}
 platform: {{ .Platform }}
 
 release assets:
-{{ range .Assets }}  {{ .Key }}
+{{ range .Assets }}  {{ .DisplayKey }}
     url:    {{ .DownloadURL }}
 {{end}}
 has-m1-asset: {{ .M1Asset }}
